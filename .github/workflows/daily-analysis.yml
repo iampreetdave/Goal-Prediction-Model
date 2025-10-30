@@ -616,26 +616,6 @@ htmlcov/
                           print("    ✓ .gitignore created")
                       except Exception as e:
                           pass
-                  
-                  # Generate requirements.txt if Python files exist but no requirements
-                  requirements = Path('requirements.txt')
-                  py_files = self.find_files_by_extension('*.py', limit=5)
-                  if py_files and not requirements.exists():
-                      print("  ⚙️  Creating requirements.txt...")
-                      try:
-                          stdout, _, _ = self.run_command('pip freeze')
-                          if stdout:
-                              requirements.write_text(stdout)
-                              actions.append('Created requirements.txt')
-                              print("    ✓ requirements.txt created")
-                      except Exception as e:
-                          pass
-                  
-                  self.results['self_healing_actions'] = actions
-                  if actions:
-                      print(f"  ✓ Completed {len(actions)} self-healing actions")
-                  else:
-                      print("  ✓ No self-healing needed")
               
               def save_historical_data(self) -> None:
                   """
