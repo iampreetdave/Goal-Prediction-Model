@@ -1,9 +1,17 @@
 name: Advanced Repository Analysis
 
+# ========================================
+# SCHEDULE CONFIGURATION
+# ========================================
 on:
   schedule:
+    # Runs daily at 2 AM UTC (customize time as needed)
     - cron: '0 2 * * *'
+  
+  # Allow manual trigger from GitHub Actions UI
   workflow_dispatch:
+  
+  # Auto-run when workflow file is modified
   push:
     branches:
       - main
@@ -11,48 +19,86 @@ on:
     paths:
       - '.github/workflows/daily-analysis.yml'
 
+# ========================================
+# PERMISSIONS
+# ========================================
 permissions:
-  contents: write
-  actions: read
-  issues: write
+  contents: write      # Required to commit changes
+  actions: read        # Required to read workflow runs
+  issues: write        # Optional: for creating issues
 
+# ========================================
+# MAIN JOB
+# ========================================
 jobs:
   analyze-and-update:
     runs-on: ubuntu-latest
     
     steps:
+      # ========================================
+      # STEP 1: Checkout Repository
+      # ========================================
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # Get full git history for changelog
           token: ${{ secrets.GITHUB_TOKEN }}
       
+      # ========================================
+      # STEP 2: Setup Python Environment
+      # ========================================
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
       
+      # ========================================
+      # STEP 3: Install Analysis Tools
+      # ========================================
       - name: Install analysis tools
         continue-on-error: true
         run: |
           echo "=== Installing Analysis Tools ===" > install.log
           
-          # Python tools
+          # Upgrade pip first
           pip install --upgrade pip 2>&1 | tee -a install.log
+          
+          # Install Python analysis tools
+          # - pylint: Code quality checker
+          # - flake8: Style guide enforcement
+          # - bandit: Security vulnerability scanner
+          # - radon: Complexity and maintainability metrics
+          # - pytest/pytest-cov: Test coverage
+          # - pip-audit: Dependency vulnerability scanner
+          # - safety: Alternative security checker
           pip install pylint flake8 bandit radon pytest pytest-cov pip-audit safety 2>&1 | tee -a install.log || echo "Warning: Some Python tools failed"
           
-          # Node.js tools
+          # Install Node.js tools if npm is available
           if command -v npm &> /dev/null; then
             npm install -g jshint markdownlint-cli 2>&1 | tee -a install.log || echo "Warning: Some Node tools failed"
           fi
           
           echo "Installation complete"
       
+      # ========================================
+      # STEP 4: Create Analysis Script
+      # ========================================
       - name: Create advanced analysis script
         run: |
-          cat > analyze_repo.py << 'PYTHON_SCRIPT_EOF'
+          # Create the Python analysis script
+          # This script is separated for modularity and easier debugging
+          cat > analyze_repo.py << 'ANALYSIS_SCRIPT_END'
           """
-          Advanced Repository Analysis with Self-Healing & Metrics
+          Advanced Repository Analysis Script
+          
+          Features:
+          - Code complexity metrics (cyclomatic complexity, maintainability index)
+          - Test coverage detection and reporting
+          - Security vulnerability scanning
+          - Dependency health checks
+          - Self-healing (auto-generates missing files)
+          - Historical trend tracking
+          - File-level insights
           """
           import os
           import json
@@ -62,13 +108,17 @@ jobs:
           from datetime import datetime, timedelta
           from typing import Dict, List, Tuple, Any, Optional
           import traceback
-          import re
 
           class AdvancedRepositoryAnalyzer:
-              """Enhanced analyzer with complexity metrics and self-healing"""
+              """
+              Main analyzer class with comprehensive repository analysis capabilities
+              """
               
               def __init__(self):
+                  """Initialize analyzer with default configuration"""
                   self.root_path = Path('.')
+                  
+                  # Initialize results dictionary
                   self.results = {
                       'timestamp': datetime.now().isoformat(),
                       'errors': [],
@@ -90,15 +140,28 @@ jobs:
                           'files_skipped': 0
                       }
                   }
+                  
+                  # Directories to exclude from scanning
                   self.excluded_dirs = {
                       '.git', 'node_modules', 'venv', '__pycache__', 
                       '.pytest_cache', 'dist', 'build', '.eggs',
                       'env', '.env', 'vendor', 'target', 'coverage'
                   }
+                  
+                  # File to store historical analysis data
                   self.history_file = Path('.github/analysis_history.json')
               
               def run_command(self, cmd: str, timeout: int = 60) -> Tuple[str, str, int]:
-                  """Safely run shell command"""
+                  """
+                  Safely execute shell command with timeout
+                  
+                  Args:
+                      cmd: Command to execute
+                      timeout: Maximum execution time in seconds
+                  
+                  Returns:
+                      Tuple of (stdout, stderr, return_code)
+                  """
                   try:
                       result = subprocess.run(
                           cmd, 
@@ -115,9 +178,19 @@ jobs:
                       return "", str(e), 1
               
               def is_tool_available(self, tool: str) -> bool:
-                  """Check if tool is available"""
+                  """
+                  Check if a command-line tool is available in PATH
+                  
+                  Args:
+                      tool: Name of the tool to check
+                  
+                  Returns:
+                      True if tool is available, False otherwise
+                  """
                   stdout, _, code = self.run_command(f"which {tool}")
                   available = code == 0 and stdout.strip() != ""
+                  
+                  # Track tool availability
                   self.results['tools_available'][tool] = available
                   
                   if available:
@@ -128,12 +201,29 @@ jobs:
                   return available
               
               def should_skip_path(self, path: Path) -> bool:
-                  """Check if path should be skipped"""
+                  """
+                  Determine if a file path should be excluded from analysis
+                  
+                  Args:
+                      path: File path to check
+                  
+                  Returns:
+                      True if path should be skipped, False otherwise
+                  """
                   path_str = str(path)
                   return any(excluded in path.parts for excluded in self.excluded_dirs)
               
               def find_files_by_extension(self, *extensions: str, limit: int = 200) -> List[Path]:
-                  """Find files with given extensions"""
+                  """
+                  Find files matching given extensions, respecting exclusions
+                  
+                  Args:
+                      extensions: File extensions to search for (e.g., '*.py', '*.js')
+                      limit: Maximum number of files to return
+                  
+                  Returns:
+                      List of matching file paths
+                  """
                   files = []
                   try:
                       for ext in extensions:
@@ -151,10 +241,14 @@ jobs:
                   return files
               
               def analyze_code_complexity(self) -> None:
-                  """Analyze code complexity using radon"""
+                  """
+                  Analyze code complexity using radon
+                  Calculates cyclomatic complexity and maintainability index
+                  """
                   print("📊 Analyzing code complexity...")
                   
                   if not self.is_tool_available('radon'):
+                      print("  ⚠️  radon not available, skipping complexity analysis")
                       return
                   
                   py_files = self.find_files_by_extension('*.py')
@@ -166,9 +260,10 @@ jobs:
                       'low_maintainability_files': []
                   }
                   
-                  for file in py_files[:50]:
+                  # Analyze each Python file
+                  for file in py_files[:50]:  # Limit to 50 files to avoid timeout
                       try:
-                          # Cyclomatic complexity
+                          # Calculate cyclomatic complexity
                           stdout, _, code = self.run_command(f'radon cc "{file}" -j')
                           if code == 0 and stdout.strip():
                               cc_data = json.loads(stdout)
@@ -176,13 +271,14 @@ jobs:
                                   avg_complexity = sum(f['complexity'] for f in cc_data[str(file)]) / len(cc_data[str(file)]) if cc_data[str(file)] else 0
                                   complexity_data['cyclomatic_complexity'][str(file)] = round(avg_complexity, 2)
                                   
+                                  # Flag high complexity files (threshold: 10)
                                   if avg_complexity > 10:
                                       complexity_data['high_complexity_files'].append({
                                           'file': str(file),
                                           'complexity': round(avg_complexity, 2)
                                       })
                           
-                          # Maintainability index
+                          # Calculate maintainability index
                           stdout, _, code = self.run_command(f'radon mi "{file}" -j')
                           if code == 0 and stdout.strip():
                               mi_data = json.loads(stdout)
@@ -194,6 +290,7 @@ jobs:
                                       'rank': rank
                                   }
                                   
+                                  # Flag low maintainability files (rank C, D, F)
                                   if rank in ['C', 'D', 'F']:
                                       complexity_data['low_maintainability_files'].append({
                                           'file': str(file),
@@ -206,7 +303,7 @@ jobs:
                       except Exception as e:
                           self.results['warnings'].append(f"Complexity analysis failed for {file}: {str(e)}")
                   
-                  # Calculate averages
+                  # Calculate overall averages
                   if complexity_data['cyclomatic_complexity']:
                       complexity_data['average_complexity'] = round(
                           sum(complexity_data['cyclomatic_complexity'].values()) / 
@@ -218,14 +315,20 @@ jobs:
                       complexity_data['average_maintainability'] = round(sum(scores) / len(scores), 2)
                   
                   self.results['complexity_metrics'] = complexity_data
+                  print(f"  ✓ Analyzed {len(py_files)} Python files")
               
               def detect_and_run_tests(self) -> None:
-                  """Detect tests and run coverage analysis"""
+                  """
+                  Detect if tests exist and run coverage analysis
+                  Automatically runs pytest with coverage if available
+                  """
                   print("🧪 Detecting and running tests...")
                   
+                  # Check for common test directories
                   test_dirs = ['tests', 'test', 'spec']
                   has_tests = any(Path(d).exists() for d in test_dirs)
                   
+                  # Check for test files
                   if not has_tests:
                       has_tests = len(self.find_files_by_extension('*test*.py', '*.test.js', limit=5)) > 0
                   
@@ -238,6 +341,7 @@ jobs:
                   }
                   
                   if has_tests and self.is_tool_available('pytest'):
+                      print("  ⚙️  Running pytest with coverage...")
                       try:
                           # Run pytest with coverage
                           stdout, stderr, code = self.run_command(
@@ -255,7 +359,7 @@ jobs:
                               coverage_data['covered_lines'] = cov_report['totals']['covered_lines']
                               coverage_data['total_lines'] = cov_report['totals']['num_statements']
                               
-                              # Find files with low coverage
+                              # Find files with low coverage (<50%)
                               for file_path, file_data in cov_report['files'].items():
                                   if file_data['summary']['percent_covered'] < 50:
                                       coverage_data['missing_coverage_files'].append({
@@ -263,21 +367,30 @@ jobs:
                                           'coverage': round(file_data['summary']['percent_covered'], 2)
                                       })
                               
-                              cov_file.unlink()  # Clean up
+                              cov_file.unlink()  # Clean up coverage file
+                              print(f"  ✓ Test coverage: {coverage_data['coverage_percent']}%")
                       
                       except Exception as e:
                           self.results['warnings'].append(f"Test coverage analysis failed: {str(e)}")
+                  elif not has_tests:
+                      print("  ⚠️  No tests detected")
+                  else:
+                      print("  ⚠️  pytest not available")
                   
                   self.results['test_coverage'] = coverage_data
               
               def scan_security_vulnerabilities(self) -> None:
-                  """Scan for security vulnerabilities"""
+                  """
+                  Scan for security vulnerabilities in code and dependencies
+                  Uses pip-audit, bandit for Python, npm audit for Node.js
+                  """
                   print("🔒 Scanning for security vulnerabilities...")
                   
                   security_issues = []
                   
-                  # Python: pip-audit
+                  # Python: pip-audit for dependency vulnerabilities
                   if self.is_tool_available('pip-audit'):
+                      print("  ⚙️  Running pip-audit...")
                       try:
                           stdout, stderr, code = self.run_command('pip-audit --format json', timeout=120)
                           if stdout.strip():
@@ -293,15 +406,16 @@ jobs:
                       except Exception as e:
                           self.results['warnings'].append(f"pip-audit failed: {str(e)}")
                   
-                  # Python: bandit for code security
+                  # Python: bandit for code security issues
                   if self.is_tool_available('bandit'):
                       py_files = self.find_files_by_extension('*.py')
                       if py_files:
+                          print("  ⚙️  Running bandit...")
                           try:
                               stdout, stderr, code = self.run_command('bandit -r . -f json -ll', timeout=60)
                               if stdout.strip():
                                   bandit_data = json.loads(stdout)
-                                  for issue in bandit_data.get('results', [])[:10]:
+                                  for issue in bandit_data.get('results', [])[:10]:  # Limit to 10 issues
                                       security_issues.append({
                                           'type': 'code',
                                           'file': issue.get('filename', 'unknown'),
@@ -312,8 +426,9 @@ jobs:
                           except Exception as e:
                               pass
                   
-                  # Node.js: npm audit
+                  # Node.js: npm audit for dependency vulnerabilities
                   if Path('package.json').exists() and self.is_tool_available('npm'):
+                      print("  ⚙️  Running npm audit...")
                       try:
                           stdout, stderr, code = self.run_command('npm audit --json', timeout=60)
                           if stdout.strip():
@@ -328,10 +443,14 @@ jobs:
                       except Exception as e:
                           pass
                   
-                  self.results['security_issues'] = security_issues[:20]  # Limit to 20
+                  self.results['security_issues'] = security_issues[:20]  # Limit to 20 total
+                  print(f"  ✓ Found {len(security_issues)} security issues")
               
               def check_dependency_health(self) -> None:
-                  """Check dependency health and outdated packages"""
+                  """
+                  Check dependency health and identify outdated packages
+                  Supports Python (pip) and Node.js (npm)
+                  """
                   print("📦 Checking dependency health...")
                   
                   health_data = {
@@ -341,12 +460,15 @@ jobs:
                   
                   # Python dependencies
                   if Path('requirements.txt').exists():
+                      print("  ⚙️  Checking Python dependencies...")
                       try:
+                          # Get total package count
                           stdout, _, _ = self.run_command('pip list --format json')
                           if stdout.strip():
                               packages = json.loads(stdout)
                               health_data['python']['total'] = len(packages)
                           
+                          # Get outdated packages
                           stdout, _, _ = self.run_command('pip list --outdated --format json', timeout=60)
                           if stdout.strip():
                               outdated = json.loads(stdout)
@@ -356,19 +478,22 @@ jobs:
                                       'current': p['version'],
                                       'latest': p['latest_version']
                                   }
-                                  for p in outdated[:10]
+                                  for p in outdated[:10]  # Limit to 10
                               ]
                       except Exception as e:
                           pass
                   
                   # Node.js dependencies
                   if Path('package.json').exists() and self.is_tool_available('npm'):
+                      print("  ⚙️  Checking Node.js dependencies...")
                       try:
+                          # Get total package count
                           stdout, _, _ = self.run_command('npm list --json --depth=0')
                           if stdout.strip():
                               npm_list = json.loads(stdout)
                               health_data['node']['total'] = len(npm_list.get('dependencies', {}))
                           
+                          # Get outdated packages
                           stdout, _, _ = self.run_command('npm outdated --json', timeout=60)
                           if stdout.strip():
                               outdated = json.loads(stdout)
@@ -378,15 +503,20 @@ jobs:
                                       'current': data.get('current', 'unknown'),
                                       'latest': data.get('latest', 'unknown')
                                   }
-                                  for name, data in list(outdated.items())[:10]
+                                  for name, data in list(outdated.items())[:10]  # Limit to 10
                               ]
                       except Exception as e:
                           pass
                   
                   self.results['dependency_health'] = health_data
+                  print(f"  ✓ Python: {health_data['python']['total']} packages ({len(health_data['python']['outdated'])} outdated)")
+                  print(f"  ✓ Node: {health_data['node']['total']} packages ({len(health_data['node']['outdated'])} outdated)")
               
               def generate_file_insights(self) -> None:
-                  """Generate file-level insights"""
+                  """
+                  Generate insights about repository files
+                  Currently identifies largest files
+                  """
                   print("📁 Generating file insights...")
                   
                   insights = []
@@ -410,9 +540,13 @@ jobs:
                       pass
                   
                   self.results['file_insights'] = insights[:10]
+                  print(f"  ✓ Generated insights for {len(insights)} files")
               
               def get_recent_changes(self) -> None:
-                  """Get recent git commits"""
+                  """
+                  Fetch recent git commits for changelog
+                  Gets last 10 commits with hash, author, time, and message
+                  """
                   print("📝 Fetching recent changes...")
                   
                   try:
@@ -429,11 +563,15 @@ jobs:
                                       'message': parts[3]
                                   })
                           self.results['recent_changes'] = changes
+                          print(f"  ✓ Fetched {len(changes)} recent commits")
                   except Exception as e:
                       pass
               
               def self_healing_mode(self) -> None:
-                  """Auto-generate missing essential files"""
+                  """
+                  Auto-generate missing essential repository files
+                  Generates: .gitignore, requirements.txt
+                  """
                   print("🔧 Running self-healing checks...")
                   
                   actions = []
@@ -441,39 +579,41 @@ jobs:
                   # Generate .gitignore if missing
                   gitignore = Path('.gitignore')
                   if not gitignore.exists():
+                      print("  ⚙️  Creating .gitignore...")
                       default_gitignore = """# Python
-          __pycache__/
-          *.py[cod]
-          *$py.class
-          venv/
-          env/
-          .env
-          *.egg-info/
-          dist/
-          build/
-          
-          # Node
-          node_modules/
-          npm-debug.log
-          
-          # IDEs
-          .vscode/
-          .idea/
-          *.swp
-          *.swo
-          
-          # OS
-          .DS_Store
-          Thumbs.db
-          
-          # Testing
-          .coverage
-          htmlcov/
-          .pytest_cache/
-          """
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+*.egg-info/
+dist/
+build/
+
+# Node
+node_modules/
+npm-debug.log
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Testing
+.coverage
+htmlcov/
+.pytest_cache/
+"""
                       try:
                           gitignore.write_text(default_gitignore)
                           actions.append('Created .gitignore')
+                          print("    ✓ .gitignore created")
                       except Exception as e:
                           pass
                   
@@ -481,18 +621,27 @@ jobs:
                   requirements = Path('requirements.txt')
                   py_files = self.find_files_by_extension('*.py', limit=5)
                   if py_files and not requirements.exists():
+                      print("  ⚙️  Creating requirements.txt...")
                       try:
                           stdout, _, _ = self.run_command('pip freeze')
                           if stdout:
                               requirements.write_text(stdout)
                               actions.append('Created requirements.txt')
+                              print("    ✓ requirements.txt created")
                       except Exception as e:
                           pass
                   
                   self.results['self_healing_actions'] = actions
+                  if actions:
+                      print(f"  ✓ Completed {len(actions)} self-healing actions")
+                  else:
+                      print("  ✓ No self-healing needed")
               
               def save_historical_data(self) -> None:
-                  """Save analysis history for trend tracking"""
+                  """
+                  Save analysis history for trend tracking
+                  Keeps last 30 days of data
+                  """
                   try:
                       history = []
                       
@@ -521,18 +670,24 @@ jobs:
                           if datetime.fromisoformat(h['timestamp']) > cutoff
                       ]
                       
-                      # Save
+                      # Save history
                       self.history_file.parent.mkdir(parents=True, exist_ok=True)
                       with open(self.history_file, 'w') as f:
                           json.dump(history, f, indent=2)
                       
                       self.results['historical_trends'] = history
+                      print(f"📊 Saved historical data ({len(history)} data points)")
                   
                   except Exception as e:
                       self.results['warnings'].append(f"Failed to save history: {str(e)}")
               
               def collect_repository_stats(self) -> None:
-                  """Collect comprehensive repository statistics"""
+                  """
+                  Collect comprehensive repository statistics
+                  Counts files, lines of code, and detects project features
+                  """
+                  print("📈 Collecting repository statistics...")
+                  
                   stats = {
                       'total_files': 0,
                       'python_files': 0,
@@ -550,6 +705,7 @@ jobs:
                   }
                   
                   try:
+                      # Count files by type
                       file_patterns = {
                           'python_files': ['*.py'],
                           'javascript_files': ['*.js', '*.jsx'],
@@ -564,10 +720,12 @@ jobs:
                           stats[key] = len(files)
                           stats['total_files'] += len(files)
                       
+                      # Get last commit info
                       stdout, _, code = self.run_command('git log -1 --format="%h - %s (%ar)"')
                       if code == 0 and stdout.strip():
                           stats['last_commit'] = stdout.strip()
                       
+                      # Count total lines of code
                       extensions = ['py', 'js', 'jsx', 'ts', 'tsx', 'java', 'c', 'cpp', 'go', 'rs']
                       find_cmd = ' -o '.join([f'-name "*.{ext}"' for ext in extensions])
                       stdout, _, _ = self.run_command(
@@ -580,6 +738,7 @@ jobs:
                           except (ValueError, IndexError):
                               pass
                       
+                      # Check for project features
                       stats['has_tests'] = any([
                           Path('tests').exists(),
                           Path('test').exists(),
@@ -589,6 +748,7 @@ jobs:
                       stats['has_ci'] = Path('.github/workflows').exists()
                       stats['has_docker'] = Path('Dockerfile').exists()
                       
+                      # Get repository size
                       stdout, _, _ = self.run_command('du -sm . 2>/dev/null')
                       if stdout:
                           try:
@@ -600,9 +760,16 @@ jobs:
                       self.results['warnings'].append(f"Stats error: {str(e)}")
                   
                   self.results['stats'] = stats
+                  print(f"  ✓ Total files: {stats['total_files']}, Lines: {stats['total_lines']:,}")
               
               def detect_first_run(self) -> bool:
-                  """Detect first run"""
+                  """
+                  Detect if this is the first run of the analysis
+                  Creates a marker file to track subsequent runs
+                  
+                  Returns:
+                      True if first run, False otherwise
+                  """
                   marker_file = Path('.github/.analysis_marker')
                   
                   if marker_file.exists():
@@ -616,17 +783,25 @@ jobs:
                       return False
               
               def run_analysis(self) -> Dict[str, Any]:
-                  """Run complete advanced analysis"""
+                  """
+                  Execute complete analysis workflow
+                  Orchestrates all analysis modules
+                  
+                  Returns:
+                      Dictionary containing all analysis results
+                  """
                   print("=" * 70)
                   print("Advanced Repository Analysis")
                   print("=" * 70)
                   
                   try:
+                      # Detect first run
                       self.results['analysis_metadata']['first_run'] = self.detect_first_run()
                       
                       if self.results['analysis_metadata']['first_run']:
-                          print("ℹ️  First run - initializing analysis system")
+                          print("ℹ️  First run - initializing analysis system\n")
                       
+                      # Run all analysis modules
                       self.collect_repository_stats()
                       self.analyze_code_complexity()
                       self.detect_and_run_tests()
@@ -637,6 +812,7 @@ jobs:
                       self.self_healing_mode()
                       self.save_historical_data()
                       
+                      # Print summary
                       print("\n" + "=" * 70)
                       print(f"✅ Analysis Complete!")
                       print(f"  Errors: {len(self.results['errors'])}")
@@ -653,7 +829,12 @@ jobs:
                   return self.results
               
               def save_results(self, filename: str = 'analysis_results.json') -> None:
-                  """Save results to file"""
+                  """
+                  Save analysis results to JSON file
+                  
+                  Args:
+                      filename: Output filename
+                  """
                   try:
                       with open(filename, 'w') as f:
                           json.dump(self.results, f, indent=2, default=str)
@@ -662,7 +843,10 @@ jobs:
                       print(f"\n❌ Failed to save: {str(e)}")
               
               def set_github_output(self) -> None:
-                  """Set GitHub Actions outputs"""
+                  """
+                  Set outputs for GitHub Actions
+                  Allows workflow to access analysis results
+                  """
                   try:
                       output_file = os.environ.get('GITHUB_OUTPUT')
                       if output_file:
@@ -674,107 +858,140 @@ jobs:
                   except Exception as e:
                       pass
 
+          # ========================================
+          # SCRIPT ENTRY POINT
+          # ========================================
           if __name__ == "__main__":
               analyzer = AdvancedRepositoryAnalyzer()
               results = analyzer.run_analysis()
               analyzer.save_results()
               analyzer.set_github_output()
               sys.exit(0)
-          PYTHON_SCRIPT_EOF
+          ANALYSIS_SCRIPT_END
           
           echo "✅ Advanced analysis script created"
       
+      # ========================================
+      # STEP 5: Run Analysis
+      # ========================================
       - name: Run advanced analysis
         id: analysis
         continue-on-error: true
         run: python analyze_repo.py
       
+      # ========================================
+      # STEP 6: Generate Changelog
+      # ========================================
       - name: Generate changelog
         continue-on-error: true
         run: |
-          python << 'CHANGELOG_SCRIPT_EOF'
+          # Create changelog generation script
+          cat > generate_changelog.py << 'CHANGELOG_SCRIPT_END'
+          """
+          Changelog Generator
+          Generates CHANGELOG.md from git commit history
+          """
           from datetime import datetime, timedelta
           from pathlib import Path
           import subprocess
-          import re
 
           def run_cmd(cmd):
+              """Execute command safely"""
               try:
                   result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
                   return result.stdout, result.returncode
               except:
                   return "", 1
 
-          changelog_path = Path('CHANGELOG.md')
-          
-          # Get commits from last 30 days
-          since = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
-          stdout, code = run_cmd(f'git log --since="{since}" --pretty=format:"%h|%ad|%an|%s" --date=short')
-          
-          if code == 0 and stdout:
-              # Parse commits
-              commits_by_date = {}
-              for line in stdout.strip().split('\n'):
-                  parts = line.split('|', 3)
-                  if len(parts) == 4:
-                      hash_val, date, author, message = parts
-                      
-                      if date not in commits_by_date:
-                          commits_by_date[date] = []
-                      
-                      commits_by_date[date].append({
-                          'hash': hash_val,
-                          'author': author,
-                          'message': message
-                      })
+          def generate_changelog():
+              """Generate changelog from git history"""
+              changelog_path = Path('CHANGELOG.md')
               
-              # Generate changelog header
-              changelog_lines = [
-                  "# Changelog",
-                  "",
-                  "All notable changes to this project will be documented in this file.",
-                  "",
-                  "*Auto-generated by GitHub Actions*",
-                  ""
-              ]
+              # Get commits from last 30 days
+              since = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d')
+              stdout, code = run_cmd(f'git log --since="{since}" --pretty=format:"%h|%ad|%an|%s" --date=short')
               
-              for date in sorted(commits_by_date.keys(), reverse=True):
-                  changelog_lines.append(f"\n## [{date}]\n")
+              if code == 0 and stdout:
+                  # Parse commits by date
+                  commits_by_date = {}
+                  for line in stdout.strip().split('\n'):
+                      parts = line.split('|', 3)
+                      if len(parts) == 4:
+                          hash_val, date, author, message = parts
+                          
+                          if date not in commits_by_date:
+                              commits_by_date[date] = []
+                          
+                          commits_by_date[date].append({
+                              'hash': hash_val,
+                              'author': author,
+                              'message': message
+                          })
                   
-                  for commit in commits_by_date[date]:
-                      msg = commit['message']
+                  # Build changelog content
+                  lines = [
+                      "# Changelog",
+                      "",
+                      "All notable changes to this project will be documented in this file.",
+                      "",
+                      "*Auto-generated by GitHub Actions*",
+                      ""
+                  ]
+                  
+                  # Add commits grouped by date
+                  for date in sorted(commits_by_date.keys(), reverse=True):
+                      lines.append(f"## [{date}]")
+                      lines.append("")
                       
-                      # Categorize commit
-                      if any(word in msg.lower() for word in ['fix', 'bug', 'patch']):
-                          prefix = '🐛 **Fixed:**'
-                      elif any(word in msg.lower() for word in ['feat', 'add', 'new']):
-                          prefix = '✨ **Added:**'
-                      elif any(word in msg.lower() for word in ['update', 'change', 'modify']):
-                          prefix = '♻️ **Changed:**'
-                      elif any(word in msg.lower() for word in ['doc', 'readme']):
-                          prefix = '📚 **Documentation:**'
-                      elif any(word in msg.lower() for word in ['test']):
-                          prefix = '✅ **Testing:**'
-                      else:
-                          prefix = '🔧'
+                      for commit in commits_by_date[date]:
+                          msg = commit['message']
+                          
+                          # Categorize commit by keywords
+                          if any(word in msg.lower() for word in ['fix', 'bug', 'patch']):
+                              prefix = '🐛 **Fixed:**'
+                          elif any(word in msg.lower() for word in ['feat', 'add', 'new']):
+                              prefix = '✨ **Added:**'
+                          elif any(word in msg.lower() for word in ['update', 'change', 'modify']):
+                              prefix = '♻️ **Changed:**'
+                          elif any(word in msg.lower() for word in ['doc', 'readme']):
+                              prefix = '📚 **Documentation:**'
+                          elif any(word in msg.lower() for word in ['test']):
+                              prefix = '✅ **Testing:**'
+                          else:
+                              prefix = '🔧'
+                          
+                          lines.append(f"- {prefix} {msg} ([`{commit['hash']}`](../../commit/{commit['hash']}))")
                       
-                      changelog_lines.append(f"- {prefix} {msg} ([`{commit['hash']}`](../../commit/{commit['hash']}))")
-              
-              changelog_lines.append(f"\n---\n")
-              changelog_lines.append(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}*")
-              
-              # Save changelog
-              changelog_path.write_text('\n'.join(changelog_lines))
-              print("✅ CHANGELOG.md updated")
-          else:
-              print("⚠️ No git history available")
-          CHANGELOG_SCRIPT_EOF
+                      lines.append("")
+                  
+                  # Add footer
+                  lines.append("---")
+                  lines.append("")
+                  lines.append(f"*Last updated: {datetime.now().strftime('%Y-%m-%d %H:%M UTC')}*")
+                  
+                  # Save changelog
+                  changelog_path.write_text('\n'.join(lines))
+                  print("✅ CHANGELOG.md updated")
+              else:
+                  print("⚠️ No git history available")
+
+          if __name__ == "__main__":
+              generate_changelog()
+          CHANGELOG_SCRIPT_END
+          
+          # Run changelog generator
+          python generate_changelog.py
       
+      # ========================================
+      # STEP 7: Create README Updater
+      # ========================================
       - name: Create advanced README updater
         run: |
-          cat > update_readme.py << 'PYTHON_SCRIPT_EOF'
+          # Create README updater script
+          cat > update_readme.py << 'README_SCRIPT_END'
           """
-          Advanced README updater with comprehensive sections
+          Advanced README Updater
+          Updates README.md with comprehensive analysis results
           """
           import json
           from datetime import datetime
@@ -783,20 +1000,25 @@ jobs:
           import re
 
           class AdvancedReadmeUpdater:
-              """Enhanced README updater with all new features"""
+              """
+              Handles README creation and updates with full analysis data
+              """
               
+              # HTML comment markers for identifying analysis section
               ANALYSIS_MARKER_START = "<!-- AUTO-ANALYSIS-START -->"
               ANALYSIS_MARKER_END = "<!-- AUTO-ANALYSIS-END -->"
               
               def __init__(self, results_file: str = 'analysis_results.json'):
+                  """Initialize updater with results file path"""
                   self.results_file = Path(results_file)
                   self.readme_path = Path('README.md')
                   self.results = self.load_results()
               
               def load_results(self) -> Dict[str, Any]:
-                  """Load analysis results"""
+                  """Load analysis results from JSON file"""
                   try:
                       if not self.results_file.exists():
+                          print("⚠️  No results file found")
                           return self.empty_results()
                       
                       with open(self.results_file, 'r') as f:
@@ -805,7 +1027,8 @@ jobs:
                       print(f"⚠️  Error loading results: {e}")
                       return self.empty_results()
               
-              def empty_results(self):
+              def empty_results(self) -> Dict[str, Any]:
+                  """Return empty results structure"""
                   return {
                       'timestamp': datetime.now().isoformat(),
                       'errors': [], 'warnings': [], 'stats': {},
@@ -818,9 +1041,10 @@ jobs:
                   }
               
               def detect_project_name(self) -> str:
-                  """Detect project name"""
+                  """Detect project name from git remote or directory"""
                   import subprocess
                   
+                  # Try git remote URL
                   try:
                       result = subprocess.run(
                           ['git', 'config', '--get', 'remote.origin.url'],
@@ -834,91 +1058,98 @@ jobs:
                   except:
                       pass
                   
+                  # Fallback to directory name
                   try:
                       return Path.cwd().name.replace('-', ' ').replace('_', ' ').title()
                   except:
                       return "Project Repository"
               
               def create_default_readme(self) -> str:
-                  """Create default README"""
+                  """Create a default README if none exists"""
                   project_name = self.detect_project_name()
-                  return f"""# {project_name}
-
-Welcome to {project_name}! This README was automatically generated.
-
-## About
-
-Add your project description here.
-
-## Getting Started
-
-Add installation and usage instructions here.
-
-"""
+                  
+                  readme_lines = [
+                      f"# {project_name}",
+                      "",
+                      f"Welcome to {project_name}! This README was automatically generated.",
+                      "",
+                      "## About",
+                      "",
+                      "Add your project description here.",
+                      "",
+                      "## Getting Started",
+                      "",
+                      "Add installation and usage instructions here.",
+                      ""
+                  ]
+                  
+                  return '\n'.join(readme_lines)
               
               def read_existing_readme(self) -> str:
-                  """Read existing or create new README"""
+                  """Read existing README or create new one"""
                   if self.readme_path.exists():
                       try:
                           with open(self.readme_path, 'r', encoding='utf-8') as f:
                               return f.read()
                       except Exception as e:
+                          print(f"⚠️  Error reading README: {e}")
                           return self.create_default_readme()
                   else:
                       print("ℹ️  Creating new README.md")
                       return self.create_default_readme()
               
               def remove_old_analysis_section(self, content: str) -> str:
-                  """Remove old analysis section"""
+                  """Remove old analysis section using HTML markers"""
                   pattern = f"{re.escape(self.ANALYSIS_MARKER_START)}.*?{re.escape(self.ANALYSIS_MARKER_END)}"
                   content = re.sub(pattern, '', content, flags=re.DOTALL)
                   return content.rstrip() + "\n\n"
               
               def generate_trends_chart(self) -> str:
-                  """Generate ASCII trend chart"""
+                  """Generate ASCII trend visualization"""
                   trends = self.results.get('historical_trends', [])
                   
                   if len(trends) < 2:
                       return ""
                   
-                  chart = "\n### 📈 Trends (Last 30 Days)\n\n"
+                  chart_lines = ["\n### 📈 Trends (Last 30 Days)\n"]
                   
                   # Error trend
                   error_counts = [t['error_count'] for t in trends[-7:]]
                   if error_counts:
-                      max_errors = max(error_counts) if max(error_counts) > 0 else 1
-                      chart += "**Errors:** "
-                      chart += ''.join(['█' if e > 0 else '▁' for e in error_counts])
-                      chart += f" (Current: {error_counts[-1]})\n"
+                      chart_lines.append("**Errors:** ")
+                      chart_lines.append(''.join(['█' if e > 0 else '▁' for e in error_counts]))
+                      chart_lines.append(f" (Current: {error_counts[-1]})\n")
                   
                   # Coverage trend
                   coverage = [t.get('test_coverage', 0) for t in trends[-7:]]
                   if any(coverage):
-                      chart += f"**Test Coverage:** {coverage[-1]:.1f}% "
+                      chart_lines.append(f"**Test Coverage:** {coverage[-1]:.1f}% ")
                       
                       if len(coverage) > 1:
                           change = coverage[-1] - coverage[-2]
                           if change > 0:
-                              chart += f"📈 +{change:.1f}%"
+                              chart_lines.append(f"📈 +{change:.1f}%")
                           elif change < 0:
-                              chart += f"📉 {change:.1f}%"
-                      chart += "\n"
+                              chart_lines.append(f"📉 {change:.1f}%")
+                      chart_lines.append("\n")
                   
                   # Lines of code trend
                   loc = [t.get('total_lines', 0) for t in trends[-7:]]
                   if any(loc):
-                      chart += f"**Lines of Code:** {loc[-1]:,} "
+                      chart_lines.append(f"**Lines of Code:** {loc[-1]:,} ")
                       
                       if len(loc) > 1 and loc[-2] > 0:
                           change_pct = ((loc[-1] - loc[-2]) / loc[-2]) * 100
                           if abs(change_pct) > 0.1:
-                              chart += f"({'📈' if change_pct > 0 else '📉'} {change_pct:+.1f}%)"
-                      chart += "\n"
+                              chart_lines.append(f"({'📈' if change_pct > 0 else '📉'} {change_pct:+.1f}%)")
+                      chart_lines.append("\n")
                   
-                  return chart
+                  return ''.join(chart_lines)
               
               def generate_analysis_section(self) -> str:
-                  """Generate comprehensive analysis section"""
+                  """Generate the comprehensive analysis section for README"""
+                  
+                  # Extract data from results
                   stats = self.results.get('stats', {})
                   errors = self.results.get('errors', [])
                   warnings = self.results.get('warnings', [])
@@ -934,13 +1165,14 @@ Add installation and usage instructions here.
                   warning_count = len(warnings)
                   security_count = len(security)
                   
+                  # Format timestamp
                   try:
                       timestamp = datetime.fromisoformat(self.results['timestamp'])
                       timestamp_str = timestamp.strftime('%Y-%m-%d %H:%M UTC')
                   except:
                       timestamp_str = "Unknown"
                   
-                  # Status determination
+                  # Determine overall status
                   if security_count > 5:
                       status_emoji, status_text, status_color = '🔴', f'{security_count} Security Issues', '🔴'
                   elif error_count > 0:
@@ -950,166 +1182,227 @@ Add installation and usage instructions here.
                   else:
                       status_emoji, status_text, status_color = '✅', 'Healthy', '🟢'
                   
-                  section = f"""{self.ANALYSIS_MARKER_START}
-
----
-
-## 📊 Automated Repository Analysis
-
-<div align="center">
-
-{status_color} **Status:** {status_emoji} **{status_text}**  
-🕒 **Last Analysis:** {timestamp_str}
-
-</div>
-
-"""
+                  # Start building the section
+                  lines = [
+                      self.ANALYSIS_MARKER_START,
+                      "",
+                      "---",
+                      "",
+                      "## 📊 Automated Repository Analysis",
+                      "",
+                      "<div align=\"center\">",
+                      "",
+                      f"{status_color} **Status:** {status_emoji} **{status_text}**  ",
+                      f"🕒 **Last Analysis:** {timestamp_str}",
+                      "",
+                      "</div>",
+                      ""
+                  ]
                   
                   # Self-healing notice
                   if healing:
-                      section += f"""
-> 🔧 **Self-Healing Actions Taken:** {', '.join(healing)}
-
-"""
+                      lines.append(f"> 🔧 **Self-Healing Actions Taken:** {', '.join(healing)}")
+                      lines.append("")
                   
                   # Main statistics table
-                  section += "### 📈 Project Statistics\n\n"
-                  section += "| Metric | Value | Status |\n|--------|-------|--------|\n"
+                  lines.extend([
+                      "### 📈 Project Statistics",
+                      "",
+                      "| Metric | Value | Status |",
+                      "|--------|-------|--------|"
+                  ])
                   
                   if stats:
-                      section += f"| **Total Files** | {stats.get('total_files', 0)} | - |\n"
-                      section += f"| **Lines of Code** | {stats.get('total_lines', 0):,} | - |\n"
-                      section += f"| **Repository Size** | {stats.get('repository_size_mb', 0)} MB | - |\n"
+                      lines.append(f"| **Total Files** | {stats.get('total_files', 0)} | - |")
+                      lines.append(f"| **Lines of Code** | {stats.get('total_lines', 0):,} | - |")
+                      lines.append(f"| **Repository Size** | {stats.get('repository_size_mb', 0)} MB | - |")
                       
+                      # Test coverage
                       if coverage.get('has_tests'):
                           cov_pct = coverage.get('coverage_percent', 0)
                           cov_status = '🟢' if cov_pct >= 80 else '🟡' if cov_pct >= 60 else '🔴'
-                          section += f"| **Test Coverage** | {cov_pct:.1f}% | {cov_status} |\n"
+                          lines.append(f"| **Test Coverage** | {cov_pct:.1f}% | {cov_status} |")
                       else:
-                          section += "| **Test Coverage** | No tests | 🔴 |\n"
+                          lines.append("| **Test Coverage** | No tests | 🔴 |")
                       
+                      # Maintainability index
                       if complexity.get('average_maintainability'):
                           mi = complexity['average_maintainability']
                           mi_status = '🟢' if mi >= 20 else '🟡' if mi >= 10 else '🔴'
-                          section += f"| **Maintainability Index** | {mi:.1f} | {mi_status} |\n"
+                          lines.append(f"| **Maintainability Index** | {mi:.1f} | {mi_status} |")
                       
+                      # Cyclomatic complexity
                       if complexity.get('average_complexity'):
                           cc = complexity['average_complexity']
                           cc_status = '🟢' if cc <= 5 else '🟡' if cc <= 10 else '🔴'
-                          section += f"| **Avg Cyclomatic Complexity** | {cc:.1f} | {cc_status} |\n"
+                          lines.append(f"| **Avg Cyclomatic Complexity** | {cc:.1f} | {cc_status} |")
                       
-                      section += f"| **Security Issues** | {security_count} | {'🔴' if security_count > 0 else '🟢'} |\n"
+                      lines.append(f"| **Security Issues** | {security_count} | {'🔴' if security_count > 0 else '🟢'} |")
                   
-                  # Trends
+                  # Add trends
                   trends_chart = self.generate_trends_chart()
                   if trends_chart:
-                      section += trends_chart
+                      lines.append(trends_chart)
                   
-                  # Code quality details
+                  # Code quality concerns
                   if complexity:
                       high_complexity = complexity.get('high_complexity_files', [])
                       low_maintain = complexity.get('low_maintainability_files', [])
                       
                       if high_complexity or low_maintain:
-                          section += "\n### ⚠️ Code Quality Concerns\n\n"
+                          lines.extend([
+                              "",
+                              "### ⚠️ Code Quality Concerns",
+                              ""
+                          ])
                           
                           if high_complexity:
-                              section += "<details>\n<summary>High Complexity Files</summary>\n\n"
+                              lines.extend([
+                                  "<details>",
+                                  "<summary>High Complexity Files</summary>",
+                                  ""
+                              ])
                               for item in high_complexity[:5]:
-                                  section += f"- `{item['file']}` (Complexity: {item['complexity']})\n"
-                              section += "\n</details>\n\n"
+                                  lines.append(f"- `{item['file']}` (Complexity: {item['complexity']})")
+                              lines.extend(["", "</details>", ""])
                           
                           if low_maintain:
-                              section += "<details>\n<summary>Low Maintainability Files</summary>\n\n"
+                              lines.extend([
+                                  "<details>",
+                                  "<summary>Low Maintainability Files</summary>",
+                                  ""
+                              ])
                               for item in low_maintain[:5]:
-                                  section += f"- `{item['file']}` (Score: {item['score']}, Rank: {item['rank']})\n"
-                              section += "\n</details>\n\n"
+                                  lines.append(f"- `{item['file']}` (Score: {item['score']}, Rank: {item['rank']})")
+                              lines.extend(["", "</details>", ""])
                   
                   # Security issues
                   if security_count > 0:
-                      section += f"\n### 🔒 Security Vulnerabilities ({security_count})\n\n"
-                      
-                      section += "<details>\n<summary>Click to expand security issues</summary>\n\n"
+                      lines.extend([
+                          "",
+                          f"### 🔒 Security Vulnerabilities ({security_count})",
+                          "",
+                          "<details>",
+                          "<summary>Click to expand security issues</summary>",
+                          ""
+                      ])
                       
                       for issue in security[:10]:
-                          if issue.get('type') == 'python' or issue.get('type') == 'node':
-                              section += f"- **{issue.get('package', 'Unknown')}** "
-                              section += f"({issue.get('version', 'unknown')}) - "
-                              section += f"{issue.get('vulnerability', 'Security issue')} "
-                              section += f"[{issue.get('severity', 'unknown').upper()}]\n"
+                          if issue.get('type') in ['python', 'node']:
+                              lines.append(
+                                  f"- **{issue.get('package', 'Unknown')}** "
+                                  f"({issue.get('version', 'unknown')}) - "
+                                  f"{issue.get('vulnerability', 'Security issue')} "
+                                  f"[{issue.get('severity', 'unknown').upper()}]"
+                              )
                           elif issue.get('type') == 'code':
-                              section += f"- `{issue.get('file', 'Unknown')}:{issue.get('line', '?')}` - "
-                              section += f"{issue.get('issue', 'Security issue')} "
-                              section += f"[{issue.get('severity', 'unknown').upper()}]\n"
+                              lines.append(
+                                  f"- `{issue.get('file', 'Unknown')}:{issue.get('line', '?')}` - "
+                                  f"{issue.get('issue', 'Security issue')} "
+                                  f"[{issue.get('severity', 'unknown').upper()}]"
+                              )
                       
                       if security_count > 10:
-                          section += f"\n*...and {security_count - 10} more*\n"
+                          lines.append(f"\n*...and {security_count - 10} more*")
                       
-                      section += "\n</details>\n\n"
+                      lines.extend(["", "</details>", ""])
                   
                   # Dependency health
                   if deps.get('python', {}).get('outdated') or deps.get('node', {}).get('outdated'):
-                      section += "\n### 📦 Dependency Health\n\n"
+                      lines.extend([
+                          "",
+                          "### 📦 Dependency Health",
+                          ""
+                      ])
                       
                       py_deps = deps.get('python', {})
                       if py_deps.get('outdated'):
-                          section += f"**Python:** {len(py_deps['outdated'])} outdated packages\n"
-                          section += "<details>\n<summary>View outdated Python packages</summary>\n\n"
+                          lines.append(f"**Python:** {len(py_deps['outdated'])} outdated packages")
+                          lines.extend([
+                              "<details>",
+                              "<summary>View outdated Python packages</summary>",
+                              ""
+                          ])
                           for pkg in py_deps['outdated'][:10]:
-                              section += f"- `{pkg['name']}`: {pkg['current']} → {pkg['latest']}\n"
-                          section += "\n</details>\n\n"
+                              lines.append(f"- `{pkg['name']}`: {pkg['current']} → {pkg['latest']}")
+                          lines.extend(["", "</details>", ""])
                       
                       node_deps = deps.get('node', {})
                       if node_deps.get('outdated'):
-                          section += f"**Node.js:** {len(node_deps['outdated'])} outdated packages\n"
-                          section += "<details>\n<summary>View outdated Node packages</summary>\n\n"
+                          lines.append(f"**Node.js:** {len(node_deps['outdated'])} outdated packages")
+                          lines.extend([
+                              "<details>",
+                              "<summary>View outdated Node packages</summary>",
+                              ""
+                          ])
                           for pkg in node_deps['outdated'][:10]:
-                              section += f"- `{pkg['name']}`: {pkg['current']} → {pkg['latest']}\n"
-                          section += "\n</details>\n\n"
+                              lines.append(f"- `{pkg['name']}`: {pkg['current']} → {pkg['latest']}")
+                          lines.extend(["", "</details>", ""])
                   
                   # File insights
                   if insights:
-                      section += "\n### 📁 File Insights\n\n"
-                      section += "<details>\n<summary>Largest Files</summary>\n\n"
+                      lines.extend([
+                          "",
+                          "### 📁 File Insights",
+                          "",
+                          "<details>",
+                          "<summary>Largest Files</summary>",
+                          ""
+                      ])
                       for insight in insights[:5]:
-                          section += f"- `{insight['file']}` ({insight['size']})\n"
-                      section += "\n</details>\n\n"
+                          lines.append(f"- `{insight['file']}` ({insight['size']})")
+                      lines.extend(["", "</details>", ""])
                   
                   # Recent changes
                   if changes:
-                      section += "\n### 📝 Recent Changes\n\n"
+                      lines.extend([
+                          "",
+                          "### 📝 Recent Changes",
+                          ""
+                      ])
                       for change in changes[:5]:
-                          section += f"- [`{change['hash']}`](../../commit/{change['hash']}) "
-                          section += f"{change['message']} "
-                          section += f"*({change['time']} by {change['author']})*\n"
+                          lines.append(
+                              f"- [`{change['hash']}`](../../commit/{change['hash']}) "
+                              f"{change['message']} "
+                              f"*({change['time']} by {change['author']})*"
+                          )
                       
                       if Path('CHANGELOG.md').exists():
-                          section += "\n[View Full Changelog →](CHANGELOG.md)\n"
+                          lines.extend(["", "[View Full Changelog →](CHANGELOG.md)"])
                   
                   # Footer
-                  section += f"""
----
-
-<div align="center">
-  <sub>🤖 Automated analysis powered by <a href=".github/workflows/daily-analysis.yml">GitHub Actions</a></sub><br>
-  <sub>Includes complexity metrics, security scanning, test coverage, and trend analysis</sub>
-</div>
-
-{self.ANALYSIS_MARKER_END}
-"""
+                  lines.extend([
+                      "",
+                      "---",
+                      "",
+                      "<div align=\"center\">",
+                      "  <sub>🤖 Automated analysis powered by <a href=\".github/workflows/daily-analysis.yml\">GitHub Actions</a></sub><br>",
+                      "  <sub>Includes complexity metrics, security scanning, test coverage, and trend analysis</sub>",
+                      "</div>",
+                      "",
+                      self.ANALYSIS_MARKER_END
+                  ])
                   
-                  return section
+                  return '\n'.join(lines)
               
               def update_readme(self) -> bool:
-                  """Main update function"""
+                  """Main function to update README with analysis results"""
                   try:
                       print("\n📝 Updating README.md...")
                       
+                      # Read or create README
                       content = self.read_existing_readme()
+                      
+                      # Remove old analysis section
                       content = self.remove_old_analysis_section(content)
+                      
+                      # Generate new analysis section
                       analysis_section = self.generate_analysis_section()
+                      
+                      # Combine content
                       new_content = content + analysis_section
                       
+                      # Write updated README
                       with open(self.readme_path, 'w', encoding='utf-8') as f:
                           f.write(new_content)
                       
@@ -1122,28 +1415,41 @@ Add installation and usage instructions here.
                       traceback.print_exc()
                       return False
 
+          # ========================================
+          # SCRIPT ENTRY POINT
+          # ========================================
           if __name__ == "__main__":
               updater = AdvancedReadmeUpdater()
               success = updater.update_readme()
               exit(0 if success else 1)
-          PYTHON_SCRIPT_EOF
+          README_SCRIPT_END
           
           echo "✅ Advanced README updater created"
       
+      # ========================================
+      # STEP 8: Update README
+      # ========================================
       - name: Update README
         continue-on-error: true
         run: python update_readme.py
       
+      # ========================================
+      # STEP 9: Commit and Push Changes
+      # ========================================
       - name: Commit and push changes
         run: |
+          # Configure git with bot credentials
           git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
+          # Stage all generated/modified files
           git add README.md CHANGELOG.md .gitignore requirements.txt .github/.analysis_marker .github/analysis_history.json 2>/dev/null || true
           
+          # Check if there are changes to commit
           if git diff --staged --quiet; then
             echo "No changes to commit"
           else
+            # Create detailed commit message
             git commit -m "🤖 Advanced analysis update
 
 - Analysis: $(date -u +"%Y-%m-%d %H:%M UTC")
@@ -1153,17 +1459,27 @@ Add installation and usage instructions here.
 
 [skip ci]"
             
+            # Push with retry logic (3 attempts)
             for i in {1..3}; do
               if git push; then
-                echo "✅ Changes pushed"
+                echo "✅ Changes pushed successfully"
                 break
               else
-                echo "⚠️  Retry $i/3"
-                [ $i -lt 3 ] && sleep 5 && git pull --rebase || exit 1
+                echo "⚠️  Push failed, retry $i/3"
+                if [ $i -lt 3 ]; then
+                  sleep 5
+                  git pull --rebase
+                else
+                  echo "❌ Failed to push after 3 attempts"
+                  exit 1
+                fi
               fi
             done
           fi
       
+      # ========================================
+      # STEP 10: Upload Artifacts
+      # ========================================
       - name: Upload artifacts
         if: always()
         uses: actions/upload-artifact@v3
@@ -1176,13 +1492,17 @@ Add installation and usage instructions here.
             install.log
           retention-days: 30
       
+      # ========================================
+      # STEP 11: Create Job Summary
+      # ========================================
       - name: Create job summary
         if: always()
         run: |
           echo "## 📊 Advanced Analysis Summary" >> $GITHUB_STEP_SUMMARY
           
           if [ -f analysis_results.json ]; then
-            python << 'SUMMARY_SCRIPT_EOF'
+            # Create summary generation script
+            cat > create_summary.py << 'SUMMARY_END'
           import json
           
           with open('analysis_results.json', 'r') as f:
@@ -1212,5 +1532,10 @@ Add installation and usage instructions here.
 - Python Outdated: {len(r.get('dependency_health', {}).get('python', {}).get('outdated', []))}
 - Node Outdated: {len(r.get('dependency_health', {}).get('node', {}).get('outdated', []))}
 """)
-          SUMMARY_SCRIPT_EOF
+          SUMMARY_END
+            
+            # Run summary script
+            python create_summary.py >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ Analysis results not found" >> $GITHUB_STEP_SUMMARY
           fi
