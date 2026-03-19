@@ -1,35 +1,99 @@
-# Goal-Prediction-Model
-This repository contains a highly engineered football (soccer) match prediction pipeline that benchmarks six leading regression algorithms on football data. The model focuses on predicting match goals, match winner (moneyline), and over/under 2.5 goals outcomes using robust historical and statistical features.
+# Goal Prediction Model
 
-This repository contains a highly engineered football (soccer) match prediction pipeline that benchmarks six leading regression algorithms on football data. The model focuses on predicting match goals, match winner (moneyline), and over/under 2.5 goals outcomes using robust historical and statistical features.
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=flat&logo=scikit-learn&logoColor=white)
+![XGBoost](https://img.shields.io/badge/XGBoost-EC6C35?style=flat)
+![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat&logo=streamlit&logoColor=white)
 
-Features
-Top Models: Ridge, Bayesian Ridge, ElasticNet, Lasso, Poisson, and XGBoost regressors, with optimized parameters and a unified API for comparison.
+> A football match prediction pipeline benchmarking six regression algorithms to predict goals, moneyline, and over/under outcomes.
 
-Data Handling: Automatic CSV importation, cleaning, proper missing value handling, and feature engineering, including dynamic calculation of match variables and odds-based probabilities like CTMCL.
+## About
 
-Historical Features: Incorporates advanced historical and momentum stats, Elo ratings, recent team form, head-to-head records, and engineered features for each match.
+A highly engineered football prediction system that benchmarks Ridge, Bayesian Ridge, ElasticNet, Lasso, Poisson, and XGBoost regressors on historical match data. The pipeline fetches live match data from the FootyStats API, computes advanced features (Elo ratings, rolling xG, form, H2H), trains regression models with proper time-series splitting, and outputs goal predictions, moneyline picks, and over/under 2.5 recommendations. Includes a Streamlit dashboard for running the full pipeline and viewing results interactively.
 
-Training & Validation: Uses a 60-20-20 time series split for train, validation, and test sets. Proper feature imputation and scaling are applied using only training data to avoid leakage.
+## Tech Stack
 
-Evaluation Metrics: Reports MAE, RMSE, R² for goal prediction, over/under accuracy and edge, moneyline accuracy and edge, median/mean error, and “TypeA” reliable predictions (absolute error under 0.2 goals).
+- **Language:** Python 3
+- **ML:** Ridge, Bayesian Ridge, ElasticNet, Lasso, Poisson, XGBoost
+- **Data:** Pandas, NumPy, scikit-learn
+- **Dashboard:** Streamlit
+- **API:** FootyStats API
+- **Serialization:** joblib (pickle)
 
-Output: Generates a comparison table of all models, detailed breakdowns per metric, and highlights best-in-class models for each betting category.
+## Features
 
-Extensible: Easily add new features or models; supports custom CSV files and new league data with minimal changes.
+- **Six regression models** benchmarked side-by-side with unified evaluation
+- **Advanced feature engineering** — Elo ratings, momentum xG, rolling form, H2H stats, CTMCL from odds
+- **Time-series split** — 60/20/20 train/validation/test to prevent data leakage
+- **Multiple prediction targets** — total goals, home/away goals, moneyline, over/under 2.5
+- **Streamlit dashboard** — interactive 3-step pipeline (fetch → extract → predict) with live status
+- **Live data pipeline** — fetches today's matches from the FootyStats API
+- **Confidence categories** — predictions graded as High, Medium, or Low confidence
+- **Comprehensive metrics** — MAE, RMSE, R², accuracy, edge, and TypeA (error < 0.2) reliable predictions
+- **CSV export** — downloadable results from the dashboard
 
-Usage
-Import historical football data (with expected goals, match stats, and betting odds).
+## Getting Started
 
-Run the main script (vo10.py) to benchmark the six top models.
+### Prerequisites
 
-Review printed tables and logs for full performance and diagnostics.
+- Python 3.8+
+- FootyStats API key
 
-Requirements
-Python (>=3.7)
+### Installation
 
-pandas, numpy, scikit-learn, xgboost
+```bash
+git clone https://github.com/iampreetdave/Goal-Prediction-Model.git
+cd Goal-Prediction-Model
+pip install pandas numpy scikit-learn xgboost streamlit joblib requests
+```
 
-Summary
-This repo enables robust, fair, and interpretable benchmarking of modern regression models for football outcome prediction, tailored for researchers and practitioners in sports analytics or betting.
+### Run
 
+**Streamlit Dashboard:**
+
+```bash
+streamlit run app.py
+```
+
+**CLI — benchmark models:**
+
+```bash
+python vo10.py
+```
+
+**CLI — fetch today's matches:**
+
+```bash
+python today_matches.py
+```
+
+## How It Works
+
+1. **Data Ingestion:** Historical match data is loaded from CSV (with xG, odds, goals, and team stats)
+2. **Feature Engineering:** Computes rolling averages, Elo ratings, form points, H2H records, and CTMCL from betting odds
+3. **Model Training:** Six regressors are trained on the training set with StandardScaler preprocessing
+4. **Evaluation:** Models are compared on MAE, RMSE, R², moneyline accuracy, and O/U edge across validation and test sets
+5. **Live Prediction:** The Streamlit app orchestrates: fetch matches → extract features → run trained models → display results
+
+## Project Structure
+
+```
+Goal-Prediction-Model/
+├── app.py                  # Streamlit dashboard
+├── vo10.py                 # Main benchmarking script (6 models)
+├── best_version.py         # Optimized model variant
+├── model_genrator.py       # Model training pipeline
+├── fetch.py                # API data fetcher
+├── today_matches.py        # Live match fetcher
+├── api-8.py                # API integration variant
+├── 15f.py / 40f.py         # Feature engineering variants
+├── best (1).py             # Best model configuration
+├── scripts/                # Utility scripts
+├── *.pkl                   # Pre-trained model files
+├── *.csv                   # Data files
+└── README.md
+```
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
